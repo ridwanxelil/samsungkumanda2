@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RX Remote</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<!--
+AI / DEVELOPER NOTE (RX Remote)
+This page is a UI PROTOTYPE of an infrared (IR) Samsung TV remote that will become an Android APK.
+A browser cannot emit IR, so send() only builds the real Samsung32 pulse pattern (window.RX.last) and flashes the indicator.
+Everything needed to port it is in the JSON block <script id="rx-spec"> below: protocol timing, key table, layout, UX rules,
+dropped features and TODOs. In the APK, replace transmit() with ConsumerIrManager.transmit(38000, pattern).
+-->
+<style>
+:root{--bg:#f2f3f6;--s:#ffffff;--s2:#e6e8ee;--t:#14161c;--m:#7a8091;--a:#e5322d;--bd:#d9dce4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0f14;--s:#1a1d26;--s2:#252936;--t:#eceef4;--m:#7d8498;--bd:#2a2e3b}}
+:root[data-theme="dark"]{--bg:#0d0f14;--s:#1a1d26;--s2:#252936;--t:#eceef4;--m:#7d8498;--bd:#2a2e3b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-touch-callout:none}
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;margin:0;background:var(--bg);color:var(--t);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;touch-action:manipulation}
+body{max-width:430px;height:100%;margin:0 auto;padding:10px 14px;display:flex;flex-direction:column;gap:clamp(5px,1vh,10px)}
+header{display:flex;align-items:center;gap:8px}
+.logo{font-weight:800;letter-spacing:.5px;font-size:17px;flex:1}
+.logo b{color:var(--a)}
+#dot{width:9px;height:9px;border-radius:50%;background:var(--m);transition:background .1s,box-shadow .1s}
+#dot.t{background:var(--a);box-shadow:0 0 9px var(--a)}
+#pw{width:40px;height:40px;border-radius:50%;background:var(--a);border:0;color:#fff;font-size:18px;flex:none}
+#toast{text-align:center;font-size:11px;color:var(--m);height:12px;line-height:12px}
+button{font:inherit;color:var(--t);background:var(--s);border:1px solid var(--bd);border-radius:14px;height:48px;font-size:14px;font-weight:600;padding:0;cursor:pointer;transition:transform .08s,background .15s}
+button:active,button.p{transform:scale(.94);background:var(--s2)}
+.g{display:grid;gap:clamp(4px,.9vh,8px)}
+.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}.c5{grid-template-columns:repeat(5,1fr)}.c2{grid-template-columns:repeat(2,1fr)}
+.fl button{height:auto}
+#top{flex:.38;min-height:0}#top button{border-radius:16px}
+#nums{flex:1.3;min-height:0;grid-auto-rows:minmax(0,1fr)}.num{height:auto;font-size:24px;border-radius:12px}
+.mid{flex:1.5;min-height:0;display:grid;grid-template-columns:72px minmax(0,1fr) 72px;grid-template-rows:minmax(0,1fr);align-items:center;gap:8px}
+.pill{display:flex;flex-direction:column;background:var(--s);border:1px solid var(--bd);border-radius:32px;height:100%;max-height:340px;overflow:hidden}
+.pill button{flex:1;border:0;border-radius:0;background:none;font-size:28px}
+.pill button:active,.pill button.p{background:var(--s2);transform:none}
+#mute .x{display:none}#mute.m .x{display:block}#mute.m .w{display:none}#mute.m{color:var(--a)}
+.pill .mid2{flex:0 0 auto;height:48px;margin:0 7px;border-radius:24px;font-size:12px;background:var(--s2);border:0}
+.dw{container-type:size;min-width:0;height:100%;display:grid;place-items:center}
+.dp{position:relative;width:min(100cqw,100cqh,340px);height:min(100cqw,100cqh,340px);border-radius:50%;background:var(--s);border:1px solid var(--bd)}
+.dp button{position:absolute;border:0;background:none;width:34%;height:34%;font-size:22px;border-radius:50%}
+.dp .u{top:2%;left:33%}.dp .d{bottom:2%;left:33%}.dp .l{left:2%;top:33%}.dp .r{right:2%;top:33%}
+.dp .ok{left:31%;top:31%;width:38%;height:38%;background:var(--s2);font-weight:800;font-size:15px}
+.dp .tpb{left:auto;top:auto;right:0;bottom:0;width:36px;height:36px;font-size:17px;background:var(--s2);border:1px solid var(--bd);z-index:3;color:var(--t)}
+.pad{display:none;position:absolute;inset:0;border-radius:50%;border:2px dashed var(--a);background:var(--s);touch-action:none;z-index:2}
+.pad i{position:absolute;left:50%;top:50%;width:16px;height:16px;border-radius:50%;background:var(--a);box-shadow:0 0 10px var(--a);transform:translate(-50%,-50%);pointer-events:none}
+.pad span{position:absolute;left:0;right:0;bottom:16%;text-align:center;font-size:11px;color:var(--m);pointer-events:none}
+.dp.tp .pad{display:block}.dp.tp button:not(.tpb){visibility:hidden}.dp.tp .tpb{color:var(--a);border-color:var(--a)}
+#hm{flex:.4;min-height:0}#hm button{font-size:16px}
+#md{flex:.45;min-height:0}#md button{font-size:16px}.dots{display:inline-flex;gap:3px;margin-right:6px;vertical-align:middle}.dots i{width:10px;height:10px;border-radius:50%;display:block}
+.txt{display:flex;gap:8px;flex:none}
+.txt input{flex:1;min-width:0;height:48px;border:1px solid var(--bd);background:var(--s);color:var(--t);border-radius:24px;padding:0 16px;font-size:16px;user-select:text;outline:none}
+.txt input:focus{border-color:var(--a)}
+.txt button{width:48px;height:48px;border-radius:50%;background:var(--t);color:var(--bg);border:0;font-size:18px}
+.sheet{position:fixed;inset:0;display:none;align-items:flex-end;background:rgba(0,0,0,.45);z-index:5}
+.sheet.o{display:flex}
+.sheet>div{width:100%;max-width:430px;margin:0 auto;background:var(--bg);border-radius:26px 26px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom,0px))}
+.sheet h3{margin:0 0 12px;font-size:13px;color:var(--m);font-weight:700;letter-spacing:1px;text-align:center}
+.sheet .g{margin-bottom:8px}
+.sheet button{height:54px}.big button{font-size:22px}.bt{height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}.bt small{font-size:10px;color:var(--m);font-weight:600}.bt.s{border-color:var(--a);color:var(--a)}
+</style>
+</head>
+<body>
+<header>
+  <span id="dot" title="IR"></span><span class="logo">RX <b>Remote</b></span>
+  <button id="pw" data-k="KEY_POWER" aria-label="Güç">⏻</button>
+</header>
+<div id="toast">IR vericisini TV’ye doğrultun</div>
+
+<div class="g c4 fl" id="top">
+  <button data-k="KEY_SOURCE">Kaynak</button>
+  <button data-k="KEY_GUIDE">Rehber</button>
+  <button id="bBrand">Samsung</button>
+  <button id="more">⋯ Araçlar</button>
+</div>
+<div class="g c3" id="nums"></div>
+
+<div class="mid">
+  <div class="pill">
+    <button data-k="KEY_VOLUP" data-r>+</button>
+    <button id="mute" class="mid2" data-k="KEY_MUTE" aria-label="Sessiz"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor"/><path class="w" d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/><path class="x" d="M3 3l18 18"/></svg></button>
+    <button data-k="KEY_VOLDOWN" data-r>−</button>
+  </div>
+  <div class="dw"><div class="dp">
+    <button class="u" data-k="KEY_UP" data-r>▲</button><button class="d" data-k="KEY_DOWN" data-r>▼</button>
+    <button class="l" data-k="KEY_LEFT" data-r>◀</button><button class="r" data-k="KEY_RIGHT" data-r>▶</button>
+    <button class="ok" data-k="KEY_ENTER">OK</button>
+    <div class="pad" id="pad"><span>Kaydır = gezin · dokun = OK</span><i id="cur"></i></div>
+    <button class="tpb" id="tpb" aria-label="Dokunmatik mod">⌖</button>
+  </div></div>
+  <div class="pill">
+    <button data-k="KEY_CHUP" data-r>+</button>
+    <button class="mid2" data-k="KEY_CH_LIST">Liste</button>
+    <button data-k="KEY_CHDOWN" data-r>−</button>
+  </div>
+</div>
+
+<div class="g c2 fl" id="hm">
+  <button data-k="KEY_HOME">⌂ Ana Sayfa</button>
+  <button data-k="KEY_MENU">☰ Menü</button>
+</div>
+<div class="g c2 fl" id="md">
+  <button id="bMed">▶ Medya</button>
+  <button id="bCol"><span class="dots"><i style="background:#d93030"></i><i style="background:#2f9b46"></i><i style="background:#f5a623"></i><i style="background:#1d78dd"></i></span> Renkler</button>
+</div>
+
+<div class="txt">
+  <input id="tx" placeholder="TV’ye yazmak için dokunun" autocomplete="off" enterkeyhint="send">
+  <button id="en" aria-label="Gönder">↵</button>
+</div>
+
+<div class="sheet" id="sheet"><div>
+  <h3>ARAÇLAR</h3>
+  <div class="g c4">
+    <button data-k="KEY_INFO">Bilgi</button><button data-k="KEY_EXIT">Çıkış</button><button data-k="KEY_CAPTION">Altyazı</button>
+    <button data-k="KEY_ASPECT">Boyut</button><button data-k="KEY_SLEEP">Uyku</button><button data-k="KEY_TTX_MIX">TTX</button><button data-k="KEY_TOOLS">Seçenek</button>
+  </div>
+  <button style="width:100%;margin-top:4px" class="cls">Kapat</button>
+</div></div>
+
+<div class="sheet" id="sheetM"><div>
+  <h3>MEDYA</h3>
+  <div class="g c5 big">
+    <button data-k="KEY_REWIND">⏪</button><button data-k="KEY_PLAY">▶</button><button data-k="KEY_PAUSE">⏸</button><button data-k="KEY_STOP">⏹</button><button data-k="KEY_FF">⏩</button>
+  </div>
+  <button style="width:100%;margin-top:4px" class="cls">Kapat</button>
+</div></div>
+
+<div class="sheet" id="sheetC"><div>
+  <h3>RENKLER</h3>
+  <div class="g c4">
+    <button data-k="KEY_RED" style="background:#d93030;border:0;height:72px"></button><button data-k="KEY_GREEN" style="background:#2f9b46;border:0;height:72px"></button>
+    <button data-k="KEY_YELLOW" style="background:#f5a623;border:0;height:72px"></button><button data-k="KEY_CYAN" style="background:#1d78dd;border:0;height:72px"></button>
+  </div>
+  <button style="width:100%;margin-top:4px" class="cls">Kapat</button>
+</div></div>
+
+<div class="sheet" id="sheetB"><div>
+  <h3>MARKA SEÇ</h3>
+  <div class="g c2" id="brands"></div>
+  <button style="width:100%;margin-top:4px" class="cls">Kapat</button>
+</div></div>
+
+<script type="application/json" id="rx-spec">
+{
+ "app":"RX Remote",
+ "purpose":"Minimal single-screen infrared remote for Samsung TVs. This HTML is a design prototype; the target is an Android APK.",
+ "language":"tr",
+ "platform":{
+  "target":"Android (phone with built-in IR blaster, e.g. Xiaomi)",
+  "api":"android.hardware.ConsumerIrManager",
+  "permission":"android.permission.TRANSMIT_IR",
+  "manifestFeature":"<uses-feature android:name=\"android.hardware.consumerir\" android:required=\"true\"/>",
+  "call":"irManager.transmit(38000, pattern)  // pattern = int[] microseconds, alternating mark/space, STARTS with a mark",
+  "check":"irManager.hasIrEmitter() must be true; otherwise show an explanatory screen",
+  "ui":"Fullscreen, no scrolling, portrait only, keep screen on while open, light and dark theme"
+ },
+ "ir":{
+  "protocol":"Samsung32 (NEC-like)",
+  "carrierHz":38000,
+  "timingMicros":{"headerMark":4500,"headerSpace":4500,"bitMark":560,"zeroSpace":560,"oneSpace":1690,"stopMark":560},
+  "frame":"address(8), address again(8), command(8), ~command(8); each byte sent LSB first; then stop mark. 67 pattern entries.",
+  "defaultAddress":"0x07",
+  "repeat":"While a repeatable key is held, resend the complete frame about every 108 ms (first repeat after ~350 ms).",
+  "caveats":[
+   "Command codes below are the commonly documented Samsung TV set (address 0x07). Some models/years differ: verify each key on a real TV.",
+   "IR is one-way: the TV never reports state. Mute and power are toggles and the app only guesses mute state locally.",
+   "Power over IR is a toggle and can switch the TV ON (no Wake-on-LAN needed).",
+   "No Netflix/YouTube/app shortcut keys: not reliably available as IR codes. Dropped on purpose.",
+   "Text entry is impossible over IR. The text box uses multi-tap digit keys (T9 style) and only works where the TV UI accepts digits as multi-tap input."
+  ],
+  "todo":["Offer an optional code-set selector or learning/test mode for models whose codes differ","Optional 2nd address (e.g. 0x0E) fallback for older sets"]
+ },
+ "brands":{
+  "_note":"Default brand is samsung. The chosen brand is saved (localStorage key rx_brand). Samsung codes come from the keys table. Vestel, Arçelik and Beko share rc5Codes (Philips-style RC5, system 0). rc5Codes are NOT verified on real TVs: remotes differ by model and year (newer Android TV models may use NEC). A key missing from rc5Codes shows 'not defined for this brand' and sends nothing.",
+  "samsung":{"label":"Samsung","proto":"samsung32","carrierHz":38000,"address":"0x07","status":"Yaygın kod seti"},
+  "vestel":{"label":"Vestel","proto":"rc5","carrierHz":36000,"system":0,"status":"Doğrulanmadı"},
+  "arcelik":{"label":"Arçelik","proto":"rc5","carrierHz":36000,"system":0,"status":"Doğrulanmadı"},
+  "beko":{"label":"Beko","proto":"rc5","carrierHz":36000,"system":0,"status":"Doğrulanmadı"}
+ },
+ "rc5":{"timing":"36 kHz carrier, 889 us half-bit, 14 bits: start(1), field(1 if cmd<64 else 0), toggle, 5 system bits, 6 command bits, MSB first. Bit 1 = space then mark, bit 0 = mark then space. Toggle flips on every NEW press and stays the same while a key is held. The leading space is dropped because ConsumerIrManager patterns start with a mark."},
+ "rc5Codes":{"KEY_POWER":12,"KEY_MUTE":13,"KEY_VOLUP":16,"KEY_VOLDOWN":17,"KEY_CHUP":32,"KEY_CHDOWN":33,"KEY_0":0,"KEY_1":1,"KEY_2":2,"KEY_3":3,"KEY_4":4,"KEY_5":5,"KEY_6":6,"KEY_7":7,"KEY_8":8,"KEY_9":9,"KEY_MENU":82,"KEY_SOURCE":56,"KEY_INFO":15,"KEY_UP":80,"KEY_DOWN":81,"KEY_LEFT":85,"KEY_RIGHT":86,"KEY_ENTER":87},
+ "keySchema":["id -> [command(hex), label, group, flags]; flags: R=repeat while held, T=toggle (no feedback)"],
+ "keys":{
+  "KEY_POWER":["0x02","Güç","top","T"],"KEY_SOURCE":["0x01","Kaynak","top",""],"KEY_GUIDE":["0x4F","Rehber","top",""],"KEY_TOOLS":["0x4B","Seçenek (TV Tools)","more",""],
+  "KEY_INFO":["0x1F","Bilgi","more",""],"KEY_EXIT":["0x2D","Çıkış","more",""],"KEY_CAPTION":["0x25","Altyazı","more",""],"KEY_ASPECT":["0x3E","Boyut","more",""],"KEY_SLEEP":["0x03","Uyku","more",""],"KEY_TTX_MIX":["0x2C","TTX (teletekst)","more",""],
+  "KEY_RED":["0x6C","Kırmızı","color",""],"KEY_GREEN":["0x14","Yeşil","color",""],"KEY_YELLOW":["0x15","Sarı","color",""],"KEY_CYAN":["0x16","Mavi","color",""],
+  "KEY_0":["0x11","0","numpad",""],"KEY_1":["0x04","1","numpad",""],"KEY_2":["0x05","2","numpad",""],"KEY_3":["0x06","3","numpad",""],"KEY_4":["0x08","4","numpad",""],
+  "KEY_5":["0x09","5","numpad",""],"KEY_6":["0x0A","6","numpad",""],"KEY_7":["0x0C","7","numpad",""],"KEY_8":["0x0D","8","numpad",""],"KEY_9":["0x0E","9","numpad",""],
+  "KEY_RETURN":["0x58","Geri","numpad",""],"KEY_PRECH":["0x13","Önceki kanal","numpad",""],
+  "KEY_VOLUP":["0x07","Ses +","vol","R"],"KEY_VOLDOWN":["0x0B","Ses −","vol","R"],"KEY_MUTE":["0x0F","Sessiz","vol","T"],
+  "KEY_CHUP":["0x12","Kanal +","ch","R"],"KEY_CHDOWN":["0x10","Kanal −","ch","R"],"KEY_CH_LIST":["0x6B","Kanal listesi","ch",""],
+  "KEY_UP":["0x60","Yukarı","dpad","R"],"KEY_DOWN":["0x61","Aşağı","dpad","R"],"KEY_LEFT":["0x65","Sol","dpad","R"],"KEY_RIGHT":["0x62","Sağ","dpad","R"],"KEY_ENTER":["0x68","OK","dpad",""],
+  "KEY_HOME":["0x79","Ana Sayfa (Smart Hub)","nav",""],"KEY_MENU":["0x1A","Menü","nav",""],
+  "KEY_REWIND":["0x45","Geri sar","media",""],"KEY_PLAY":["0x47","Oynat","media",""],"KEY_PAUSE":["0x4A","Duraklat","media",""],"KEY_STOP":["0x46","Durdur","media",""],"KEY_FF":["0x48","İleri sar","media",""]
+ },
+ "layout":{
+  "order":["header: IR indicator dot + logo + power","hint line (shows last key sent)","row: Kaynak, Rehber, Marka seç (opens brand sheet), Araçlar (opens tools sheet)","numpad 3x4: 1-9, Geri, 0, Önceki","middle: volume pill [+, mute icon, −] | d-pad with OK | channel pill [+, Liste, −]","row: Ana Sayfa, Menü","row: Medya (opens media sheet), Renkler (opens colour sheet)","text input + enter"],
+  "moreSheet":"Opened by the Araçlar button (title ARAÇLAR): Bilgi, Çıkış, Altyazı, Boyut, Uyku, TTX and Seçenek (the TV's own Tools key, KEY_TOOLS)","mediaSheet":"Opened by the Medya button: rewind, play, pause, stop, forward. Media keys are rarely used, so they hide behind one button.","colorSheet":"Opened by the Renkler button: red, green, yellow, blue. Sheets stay open so keys can be pressed repeatedly; close with Kapat or by tapping outside.",
+  "rules":["Buttons stretch to fill the screen height; no empty space, no scrolling","Mute icon: speaker with waves when sound on; speaker with diagonal slash and red colour when muted (local guess, toggles on each tap)","Mute sits exactly between volume + and −; channel list sits exactly between channel + and −","Back key replaced TTX in the numpad; HDMI key removed (Kaynak covers it)","Haptic tick on every key (Vibrator, ~8 ms)"]
+ },
+ "touchpad":{"what":"Toggle button (crosshair, bottom-right of the d-pad) turns the circular d-pad into a bounded touch area with a red cursor dot; press again to restore the arrow keys.","why":"IR has no pointer protocol. The cursor is visual only; finger travel is converted to arrow keys.","rules":["Cursor is clamped inside the circle","Every 26 px of finger travel on an axis sends one KEY_LEFT/RIGHT/UP/DOWN","Tap (<350 ms, <8 px movement) sends KEY_ENTER","Pad uses touch-action:none so the page never scrolls"]},
+ "apk":{"approach":"Native Android shell (no dependencies) with a WebView that loads this same HTML from assets. JS calls Android.transmit(carrierHz, 'comma,separated,pattern') which maps to ConsumerIrManager.transmit.","bridge":["Android.transmit(carrier:int, pattern:String)","Android.hasIr():boolean"],"keepInSync":"app/src/main/assets/index.html is the UI source of truth"},
+ "textInput":{
+  "method":"multi-tap on digit keys",
+  "map":{"2":"abc","3":"def","4":"ghi","5":"jkl","6":"mno","7":"pqrs","8":"tuv","9":"wxyz","0":"space (assumption)"},
+  "turkish":"ç→c ğ→g ı→i ö→o ş→s ü→u (simplified)",
+  "timing":"350 ms between presses of the same letter; wait 1100 ms before the next letter when it uses the same digit key",
+  "delete":"Not possible over IR; use the TV on-screen keyboard"
+ }
+}
+</script>
+
+<script>
+var $=function(s){return document.querySelector(s)};
+var SPEC=JSON.parse($("#rx-spec").textContent),K=SPEC.keys,IR=SPEC.ir;
+window.RX={spec:SPEC,last:null};
+
+/* numpad */
+["1","2","3","4","5","6","7","8","9","KEY_RETURN","0","KEY_PRECH"].forEach(function(x){
+  var id=x.length===1?"KEY_"+x:x,b=document.createElement("button");b.className="num";b.dataset.k=id;
+  b.textContent=id==="KEY_RETURN"?"↩ Geri":id==="KEY_PRECH"?"Önceki":x;
+  if(id==="KEY_PRECH")b.style.fontSize="15px";if(id==="KEY_RETURN")b.style.fontSize="16px";
+  $("#nums").appendChild(b)});
+
+var BR=SPEC.brands,RC5=SPEC.rc5Codes,brand="samsung",tgl=0;
+try{var sb=localStorage.getItem("rx_brand");if(sb&&BR[sb])brand=sb}catch(e){}
+/* RC5 pattern (microseconds, starts with a mark) */
+function rc5(sys,cmd,rep){
+  if(!rep)tgl^=1;
+  var bits=[1,cmd>=64?0:1,tgl],i;
+  for(i=4;i>=0;i--)bits.push((sys>>i)&1);
+  for(i=5;i>=0;i--)bits.push((cmd>>i)&1);
+  var lv=[];bits.forEach(function(b){lv.push(b?0:1,b?1:0)});
+  var p=[],cur=lv[0],d=0,u=889;
+  lv.forEach(function(v){if(v===cur)d+=u;else{p.push(d);d=u;cur=v}});
+  p.push(d);
+  if(lv[0]===0)p.shift();
+  return p;
+}
+/* Samsung32 pulse pattern (microseconds, starts with a mark) */
+function frame(addr,cmd){
+  var t=IR.timingMicros,p=[t.headerMark,t.headerSpace];
+  [addr,addr,cmd,(~cmd)&255].forEach(function(byte){
+    for(var i=0;i<8;i++){p.push(t.bitMark);p.push((byte>>i)&1?t.oneSpace:t.zeroSpace)}});
+  p.push(t.stopMark);return p;
+}
+function transmit(id,rep){ /* APK: ConsumerIrManager.transmit(carrierHz, pattern) */
+  var B=BR[brand],k=K[id],p,code;
+  if(B.proto==="rc5"){code=RC5[id];if(code===undefined){$("#toast").textContent=(k?k[1]:id)+" · "+B.label+" için tanımlı değil";return}p=rc5(B.system,code,rep)}
+  else{if(!k)return;code=parseInt(k[0],16);p=frame(parseInt(B.address,16),code)}
+  window.RX.last={key:id,brand:brand,carrierHz:B.carrierHz,pattern:p};
+  if(window.Android&&Android.transmit)Android.transmit(B.carrierHz,p.join(","));
+  $("#dot").classList.add("t");setTimeout(function(){$("#dot").classList.remove("t")},110);
+  $("#toast").textContent=k[1]+" · "+B.label+" · "+code;
+}
+function key(id,rep){
+  if(navigator.vibrate)navigator.vibrate(8);
+  if(id==="KEY_MUTE")$("#mute").classList.toggle("m");
+  transmit(id,rep);
+}
+
+/* press + hold-to-repeat (repeat keys only) */
+var hold=null;
+function stop(){if(hold){clearTimeout(hold.a);clearInterval(hold.b);hold.el.classList.remove("p");hold=null}}
+document.addEventListener("pointerdown",function(e){
+  var el=e.target.closest("[data-k]");if(!el)return;
+  stop();key(el.dataset.k);el.classList.add("p");
+  hold={el:el};
+  if(el.hasAttribute("data-r"))hold.a=setTimeout(function(){hold.b=setInterval(function(){key(el.dataset.k,true)},108)},350);
+});
+["pointerup","pointercancel","pointerleave"].forEach(function(n){document.addEventListener(n,stop)});
+document.addEventListener("contextmenu",function(e){e.preventDefault()});
+
+/* brand picker */
+function brandUI(){
+  $("#bBrand").textContent=BR[brand].label+" ▾";
+  var box=$("#brands");box.innerHTML="";
+  Object.keys(BR).forEach(function(id){
+    if(id.charAt(0)==="_")return;
+    var b=document.createElement("button");b.className="bt"+(id===brand?" s":"");
+    b.innerHTML=BR[id].label+"<small>"+BR[id].status+"</small>";
+    b.onclick=function(){brand=id;try{localStorage.setItem("rx_brand",id)}catch(e){}brandUI();$("#toast").textContent=BR[id].label+" seçildi";$("#sheetB").classList.remove("o")};
+    box.appendChild(b)});
+}
+brandUI();
+
+/* more sheet */
+[["#bBrand","#sheetB"],["#more","#sheet"],["#bMed","#sheetM"],["#bCol","#sheetC"]].forEach(function(p){$(p[0]).addEventListener("click",function(){$(p[1]).classList.add("o")})});
+document.querySelectorAll(".sheet").forEach(function(s){s.addEventListener("click",function(e){if(e.target===s||e.target.closest(".cls"))s.classList.remove("o")})});
+
+/* text via multi-tap */
+var MAP={a:[2,1],b:[2,2],c:[2,3],d:[3,1],e:[3,2],f:[3,3],g:[4,1],h:[4,2],i:[4,3],j:[5,1],k:[5,2],l:[5,3],m:[6,1],n:[6,2],o:[6,3],p:[7,1],q:[7,2],r:[7,3],s:[7,4],t:[8,1],u:[8,2],v:[8,3],w:[9,1],x:[9,2],y:[9,3],z:[9,4]};
+var TR={"ç":"c","ğ":"g","ı":"i","ö":"o","ş":"s","ü":"u"};
+function sendText(){
+  var v=$("#tx").value.toLowerCase(),steps=[],t=0,prev=-1;
+  for(var i=0;i<v.length;i++){
+    var c=TR[v[i]]||v[i];
+    if(c===" "){steps.push([t,"KEY_0"]);t+=1100;prev=-1;continue}
+    var m=MAP[c];if(!m)continue;
+    if(m[0]===prev)t+=1100;
+    for(var n=0;n<m[1];n++){steps.push([t,"KEY_"+m[0]]);t+=350}
+    prev=m[0];
+  }
+  steps.push([t+1100,"KEY_ENTER"]);
+  steps.forEach(function(s){setTimeout(function(){transmit(s[1])},s[0])});
+  $("#tx").value="";$("#tx").blur();
+}
+$("#en").addEventListener("click",sendText);
+$("#tx").addEventListener("keydown",function(e){if(e.key==="Enter")sendText()});
+
+/* touchpad mode: swipe distance becomes arrow keys, tap becomes OK (IR has no real pointer) */
+(function(){
+  var dp=$(".dp"),pad=$("#pad"),cur=$("#cur"),on=false,x=0,y=0,ax=0,ay=0,lx=null,ly=0,moved=0,t0=0,STEP=26;
+  function place(){var r=pad.clientWidth/2-14,d=Math.hypot(x,y);if(d>r){x*=r/d;y*=r/d}cur.style.left="calc(50% + "+x+"px)";cur.style.top="calc(50% + "+y+"px)"}
+  $("#tpb").addEventListener("click",function(){on=!on;dp.classList.toggle("tp",on);$("#toast").textContent=on?"Dokunmatik mod":"Yön tuşları";if(on){x=0;y=0;place()}});
+  pad.addEventListener("pointerdown",function(e){pad.setPointerCapture(e.pointerId);lx=e.clientX;ly=e.clientY;ax=0;ay=0;moved=0;t0=Date.now()});
+  pad.addEventListener("pointermove",function(e){
+    if(lx===null)return;var dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+    x+=dx;y+=dy;place();ax+=dx;ay+=dy;
+    while(ax>=STEP){key("KEY_RIGHT");ax-=STEP}while(ax<=-STEP){key("KEY_LEFT");ax+=STEP}
+    while(ay>=STEP){key("KEY_DOWN");ay-=STEP}while(ay<=-STEP){key("KEY_UP");ay+=STEP}});
+  pad.addEventListener("pointerup",function(){if(lx!==null&&moved<8&&Date.now()-t0<350)key("KEY_ENTER");lx=null});
+  pad.addEventListener("pointercancel",function(){lx=null});
+})();
+
+/* fullscreen on first tap (browser may refuse) */
+document.addEventListener("click",function(){try{var r=document.documentElement,f=r.requestFullscreen||r.webkitRequestFullscreen;if(f&&!document.fullscreenElement){var p=f.call(r);if(p&&p.catch)p.catch(function(){})}}catch(e){}},{once:true});
+</script>
+</body>
+</html>
